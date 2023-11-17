@@ -169,13 +169,16 @@ def get_rays(image_num, height, width, focal, extrinsics):
     pixel_coordinates = np.indices((height, width))
     pixel_coordinates = pixel_coordinates.transpose(1, 2, 0)
     pixel_coordinates = pixel_coordinates.reshape(-1, 2).astype(np.float32)
-    pixel_coordinates[:, 0] /= width
-    pixel_coordinates[:, 1] /= height
+    # pixel_coordinates[:, 0] /= width
+    # pixel_coordinates[:, 1] /= height
+    pixel_coordinates = pixel_coordinates[:, ::-1]  # Flip x, y
+    pixel_coordinates[:, 0] = height - pixel_coordinates[:, 0]
+    pixel_coordinates = torch.tensor(pixel_coordinates.copy(), dtype=torch.float32)
 
     intrinsics = np.array(
         [
-            [focal / height, 0, 0.5],
-            [0, focal / width, 0.5],
+            [focal, 0, height / 2],
+            [0, focal, width / 2],
             [0, 0, 1],
         ]
     )
@@ -189,15 +192,12 @@ def get_rays(image_num, height, width, focal, extrinsics):
         current_extrinsics = extrinsics[image_index]
         current_extrinsics = current_extrinsics.repeat(height * width, 1, 1)
         current_ray_directions, current_ray_origins = pixel_to_rays(
-            intrinsics, current_extrinsics, torch.tensor(pixel_coordinates)
+            intrinsics, current_extrinsics, pixel_coordinates
         )
         ray_directions.append(current_ray_directions)
         ray_origins.append(current_ray_origins)
 
     ray_directions = torch.cat(ray_directions, dim=0)
-    ray_directions *= -1
     ray_origins = torch.cat(ray_origins, dim=0)
 
     return ray_directions, ray_origins
-
-
