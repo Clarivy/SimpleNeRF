@@ -137,6 +137,7 @@ def sample_on_rays(
     near=2.0,
     far=6.0,
     n_sample=64,
+    perturb=True,
 ) -> torch.Tensor:
     """Sample points on rays.
 
@@ -151,10 +152,10 @@ def sample_on_rays(
         torch.Tensor: sample points of shape (N, n_sample, 3).
     """
     num_rays = ray_direction.shape[0]
-    width = 1 / n_sample
-    t_vals = torch.linspace(0.0, 1.0, steps=n_sample)  # (n_sample)
-    t_vals = t_vals + torch.rand(num_rays, n_sample) * width
-    t_vals = t_vals * (far - near) + near
+    t_vals = torch.linspace(near, far, steps=n_sample)  # (n_sample)
+    if perturb:
+        width = (far - near) / n_sample
+        t_vals = t_vals + (torch.rand(num_rays, n_sample) - 0.5) * width
     t_vals = t_vals.to(ray_direction.device)
 
     # Get sample points
