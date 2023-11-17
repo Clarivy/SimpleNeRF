@@ -119,16 +119,22 @@ class InputProcess(nn.Module):
         super().__init__()
         self.pe = PositionalEncoding(level=pe_level)
         self.input_dim = 3 * (pe_level * 2 + 1)
-        self.layer1 = nn.Linear(self.input_dim, 256)
-        self.layer2 = nn.Sequential(
-            nn.Linear(256, 256),
+        self.layer1 = nn.Sequential(
+            nn.Linear(self.input_dim, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
         )
-        self.layer3 = copy.deepcopy(self.layer2)
+        self.layer2 = nn.Sequential(
+            nn.Linear(256 + self.input_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -141,10 +147,9 @@ class InputProcess(nn.Module):
         """
 
         x = self.pe(x.view(-1, 1)).view(-1, self.input_dim)
-        out_1 = self.layer1(x)
-        out_2 = self.layer2(out_1)
-        out_3 = self.layer3(out_2 + out_1)
-        return out_3
+        out1 = self.layer1(x)
+        out2 = self.layer2(torch.cat([x, out1], dim=-1))
+        return out2
 
 
 class DensityLayer(nn.Module):
@@ -172,10 +177,12 @@ class DensityLayer(nn.Module):
 class RGBLayer(nn.Module):
     """RGB layer for NeRF."""
 
-    def __init__(self):
+    def __init__(self, pe_level=8):
         super().__init__()
+        self.input_dim = 3 * (pe_level * 2 + 1)
+        self.pe = PositionalEncoding(level=pe_level)
         self.layer = nn.Sequential(
-            nn.Linear(259, 128),
+            nn.Linear(256 + self.input_dim, 128),
             nn.ReLU(),
             nn.Linear(128, 3),
             nn.Sigmoid(),
@@ -191,7 +198,8 @@ class RGBLayer(nn.Module):
         Returns:
             torch.Tensor: output tensor of shape (N, 3).
         """
-        return self.layer(torch.cat([x, ray_direction], dim=-1))
+        pe_ray_direction = self.pe(ray_direction.view(-1, 1)).view(-1, self.input_dim)
+        return self.layer(torch.cat([x, pe_ray_direction], dim=-1))
 
 
 class NeRFModule(L.LightningModule):
@@ -230,9 +238,7 @@ class NeRFModule(L.LightningModule):
         return density, rgb
 
     def render_rays(
-        self,
-        ray_direction: torch.Tensor,
-        ray_origins: torch.Tensor,
+        self, ray_direction: torch.Tensor, ray_origins: torch.Tensor, perturb=True
     ) -> torch.Tensor:
         """Render rays.
 
@@ -248,6 +254,7 @@ class NeRFModule(L.LightningModule):
             near=self.near,
             far=self.far,
             n_sample=self.n_sample,
+            perturb=perturb,
         )
         density, rgb = self.forward(
             sample_points, ray_direction.repeat(self.n_sample, 1).reshape(-1, 3)
@@ -262,7 +269,7 @@ class NeRFModule(L.LightningModule):
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         """Training step"""
         pixel_rgb, ray_direction, ray_origins = batch
-        output_rgb = self.render_rays(ray_direction, ray_origins)
+        output_rgb = self.render_rays(ray_direction, ray_origins, perturb=True)
         PSNR_loss = self.PSNR_loss(output_rgb, pixel_rgb)
         self.log("PSNR", PSNR_loss)
         return PSNR_loss
@@ -270,7 +277,7 @@ class NeRFModule(L.LightningModule):
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> STEP_OUTPUT:
         """Validation step"""
         pixel_rgb, ray_direction, ray_origins = batch
-        output_rgb = self.render_rays(ray_direction, ray_origins)
+        output_rgb = self.render_rays(ray_direction, ray_origins, perturb=False)
         PSNR_loss = self.PSNR_loss(output_rgb, pixel_rgb)
         self.log("val_PSNR", PSNR_loss)
         return {"val_PSNR": PSNR_loss}
@@ -292,7 +299,7 @@ class NeRFModule(L.LightningModule):
             for ray_direction, ray_origins in test_data_loader:
                 ray_direction = ray_direction.to(self.device)
                 ray_origins = ray_origins.to(self.device)
-                test_result.append(self.render_rays(ray_direction, ray_origins))
+                test_result.append(self.render_rays(ray_direction, ray_origins, perturb=False))
         test_result = torch.cat(test_result, dim=0)
         result_images = test_result.reshape(-1, self.height, self.width, 3)
 
