@@ -126,6 +126,8 @@ class InputProcess(nn.Module):
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
         )
         self.layer2 = nn.Sequential(
             nn.Linear(256 + self.input_dim, 256),
@@ -158,7 +160,9 @@ class DensityLayer(nn.Module):
     def __init__(self):
         super().__init__()
         self.layer = nn.Sequential(
-            nn.Linear(256, 1),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1),
             nn.ReLU(),
         )
 
