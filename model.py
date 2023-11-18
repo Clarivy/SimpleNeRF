@@ -293,8 +293,8 @@ class NeRFModule(L.LightningModule):
 
     def on_train_epoch_start(self) -> None:
         """Generate spherical image for visualization."""
-        # if self.current_epoch % 10 != 0:
-        #     return
+        if self.current_epoch == 0:
+            return
 
         test_data_loader = getRaysTestingDataLoaders(
             "data/lego_200x200.npz", batch_size=4096
