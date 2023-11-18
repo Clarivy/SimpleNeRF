@@ -261,7 +261,8 @@ class NeRFModule(L.LightningModule):
             perturb=perturb,
         )
         density, rgb = self.forward(
-            sample_points, ray_direction.repeat(self.n_sample, 1).reshape(-1, 3)
+            sample_points,
+            ray_direction.unsqueeze(1).repeat(1, self.n_sample, 1).reshape(-1, 3),
         )
         density = density.reshape(-1, self.n_sample)
         rgb = rgb.reshape(-1, self.n_sample, 3)
@@ -303,7 +304,9 @@ class NeRFModule(L.LightningModule):
             for ray_direction, ray_origins in test_data_loader:
                 ray_direction = ray_direction.to(self.device)
                 ray_origins = ray_origins.to(self.device)
-                test_result.append(self.render_rays(ray_direction, ray_origins, perturb=False))
+                test_result.append(
+                    self.render_rays(ray_direction, ray_origins, perturb=False)
+                )
         test_result = torch.cat(test_result, dim=0)
         result_images = test_result.reshape(-1, self.height, self.width, 3)
 
