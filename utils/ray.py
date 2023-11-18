@@ -181,14 +181,13 @@ def get_rays(
         torch.Tensor: ray directions of shape (image_num * height * width, 3).
         torch.Tensor: ray origins of shape (image_num * height * width, 3).
     """
-    pixel_coordinates = np.indices((height, width))
-    pixel_coordinates = pixel_coordinates.transpose(1, 2, 0)
-    pixel_coordinates = pixel_coordinates.reshape(-1, 2).astype(np.float32)
-    # pixel_coordinates[:, 0] /= width
-    # pixel_coordinates[:, 1] /= height
-    pixel_coordinates = pixel_coordinates[:, ::-1]  # Flip x, y
-    pixel_coordinates[:, 0] = height - pixel_coordinates[:, 0]
-    pixel_coordinates = torch.tensor(pixel_coordinates.copy(), dtype=torch.float32)
+
+    x, y = torch.meshgrid(
+        torch.arange(height, dtype=torch.float32),
+        torch.arange(width, dtype=torch.float32),
+        indexing="xy",
+    )  # (H, W)
+    pixel_coordinates = torch.stack([x, y], dim=-1).reshape(-1, 2)  # (H * W, 2)
 
     intrinsics = np.array(
         [
