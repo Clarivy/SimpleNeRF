@@ -165,7 +165,22 @@ def sample_on_rays(
     return sample_points
 
 
-def get_rays(image_num, height, width, focal, extrinsics):
+def get_rays(
+    image_num: int, height: int, width: int, focal: float, extrinsics: np.ndarray
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Get rays from mesh grid.
+
+    Args:
+        image_num (int): number of images.
+        height (int): image height.
+        width (int): image width.
+        focal (float): focal length.
+        extrinsics (np.ndarray): extrinsics of shape (image_num, 4, 4).
+
+    Returns:
+        torch.Tensor: ray directions of shape (image_num * height * width, 3).
+        torch.Tensor: ray origins of shape (image_num * height * width, 3).
+    """
     pixel_coordinates = np.indices((height, width))
     pixel_coordinates = pixel_coordinates.transpose(1, 2, 0)
     pixel_coordinates = pixel_coordinates.reshape(-1, 2).astype(np.float32)
