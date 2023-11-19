@@ -4,10 +4,8 @@ import numpy as np
 from data_loader import getRaysDataLoaders
 from model import NeRFModule
 
-torch.set_float32_matmul_precision("medium")
-
 train_data_loader, val_data_loader = getRaysDataLoaders(
-    "data/lego_200x200.npz", batch_size=4096
+    "data/lego_200x200.npz", batch_size=2048
 )
 
 
