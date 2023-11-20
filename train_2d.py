@@ -1,13 +1,10 @@
 import lightning as L
 from data_loader import getSingleImageDataLoader
-import torch
 from model import SingleImageModule
 
-train_data_loader = getSingleImageDataLoader("data/fox.jpg", batch_size=16384)
-torch.set_float32_matmul_precision("medium")
+train_data_loader = getSingleImageDataLoader("data/Berkeley_glade_afternoon.jpg", batch_size=16384)
 
-
-trainer = L.Trainer(max_epochs=300)
+trainer = L.Trainer(max_epochs=300, default_root_dir="2d_lightning_logs")
 
 single_image_module = SingleImageModule(
     lr=1e-2,
