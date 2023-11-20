@@ -104,65 +104,104 @@ def pixel_to_rays(
     return ray_directions, ray_origins
 
 
+def sample_to_weights(sigmas: torch.Tensor, step_size: float) -> torch.Tensor:
+    """Converts sigmas to weights.
+
+    Args:
+        sigmas (torch.Tensor): density of shape (N, n_sample).
+        step_size (torch.Tensor): step size between sample of shape (n_sample).
+
+    Returns:
+        torch.Tensor: weights of shape (N, n_sample).
+    """
+    t = torch.exp(torch.cumsum(-sigmas * step_size, dim=-1))  # (N, n_sample)
+    t = torch.cat([torch.ones_like(t[:, :1]), t[:, :-1]], dim=-1)  # (N, n_sample)
+
+    # Get weights
+    weights = 1 - torch.exp(-sigmas * step_size)  # (N, n_sample)
+    weights = weights * t  # (N, n_sample)
+    return weights  # (N, n_sample)
+
+
 def volumn_render(
-    sigmas: torch.Tensor, rgbs: torch.Tensor, step_size: float
+    sigmas: torch.Tensor, rgbs: torch.Tensor, step_size: torch.Tensor
 ) -> torch.Tensor:
     """Volumn rendering.
 
     Args:
         sigmas (torch.Tensor): density of shape (N, n_sample).
         rgbs (torch.Tensor): rgb of shape (N, n_sample, 3).
-        step_size (float): step size.
+        step_size (torch.Tensor): step size between sample of shape (N, n_sample).
 
     Returns:
         torch.Tensor: rendered rgb of shape (N, 3).
     """
-
-    t = torch.exp(torch.cumsum(-sigmas * step_size, dim=-1))  # (N, n_sample)
-    t = torch.cat([torch.ones_like(t[:, :1]), t[:, :-1]], dim=-1)  # (N, n_sample)
-
-    # Get weights
-    weights = 1 - torch.exp(-sigmas * step_size)  # (N, n_sample)
+    weights = sample_to_weights(sigmas, step_size)  # (N, n_sample)
 
     # Get rgb
-    result_rgb = torch.sum(
-        weights.unsqueeze(-1) * rgbs * t.unsqueeze(-1), dim=-2
-    )  # (N, 3)
+    result_rgb = torch.sum(weights.unsqueeze(-1) * rgbs, dim=-2)  # (N, 3)
     return result_rgb  # (N, 3)
 
 
+def sample_t_vals(
+    near=2.0, far=6.0, batch_size=2048, n_sample=64, perturb=True, device="cuda"
+):
+    """Sample t values.
+
+    Args:
+        near (float, optional): near plane. Defaults to 2.0.
+        far (float, optional): far plane. Defaults to 6.0.
+        batch_size (int, optional): batch size. Defaults to 2048.
+        n_sample (int, optional): number of samples. Defaults to 64.
+        perturb (bool, optional): whether to perturb the samples. Defaults to True.
+        device (str, optional): device. Defaults to "cuda".
+
+    Returns:
+        torch.Tensor: t values of shape (batch_size, n_sample)
+    """
+    t_vals = torch.linspace(near, far, steps=n_sample)  # (n_sample)
+    t_vals = t_vals.expand(batch_size, n_sample)  # (batch_size, n_sample)
+    if perturb:
+        width = (far - near) / n_sample
+        t_vals = t_vals + torch.rand(batch_size, n_sample) * width
+    t_vals = t_vals.to(device)
+    return t_vals  # (batch_size, n_sample)
+
+
 def sample_on_rays(
+    t_vals: torch.Tensor,
     ray_direction: torch.Tensor,
     ray_origins: torch.Tensor,
-    near=2.0,
-    far=6.0,
-    n_sample=64,
-    perturb=True,
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Sample points on rays.
 
     Args:
+        t_vals (torch.Tensor): t values of shape (N, n_sample).
         ray_direction (torch.Tensor): ray direction of shape (N, 3).
         ray_origins (torch.Tensor): ray origin of shape (N, 3).
-        near (float, optional): near plane. Defaults to 2.0.
-        far (float, optional): far plane. Defaults to 6.0.
-        n_sample (int, optional): number of samples. Defaults to 64.
 
     Returns:
         torch.Tensor: sample points of shape (N, n_sample, 3).
+        torch.Tensor: step size of shape (N, n_sample).
     """
-    num_rays = ray_direction.shape[0]
-    t_vals = torch.linspace(near, far, steps=n_sample)  # (n_sample)
-    if perturb:
-        width = (far - near) / n_sample
-        t_vals = t_vals + (torch.rand(num_rays, n_sample) - 0.5) * width
-    t_vals = t_vals.to(ray_direction.device)
+
+    # Get step size between t_vals
+    step_size = torch.cat(
+        [
+            t_vals[:, 1:] - t_vals[:, :-1],
+            torch.zeros_like(t_vals[:, :1]),
+        ],
+        dim=-1,
+    )  # (N, n_sample)
 
     # Get sample points
     sample_points = ray_origins.unsqueeze(1) + ray_direction.unsqueeze(
         1
-    ) * t_vals.unsqueeze(-1)
-    return sample_points
+    ) * t_vals.unsqueeze(
+        -1
+    )  # (N, n_sample, 3)
+
+    return sample_points, step_size
 
 
 def get_rays(
@@ -215,3 +254,52 @@ def get_rays(
     ray_origins = torch.cat(ray_origins, dim=0)
 
     return ray_directions, ray_origins
+
+
+def sample_pdf(bins: torch.Tensor, weights: torch.Tensor, n_samples: int, det=False):
+    """Sample points from pdf. Reference: https://github.com/bmild/nerf
+
+    Args:
+        bins (torch.Tensor): bins of shape (N, n_c - 1). n_c is sample number of coarse model
+        weights (torch.Tensor): weights of shape (N, n_c - 2).
+        n_samples (int): number of output samples, n_f in the paper.
+        det (bool, optional): whether to use deterministic sampling. Defaults to False.
+
+    Returns:
+        torch.Tensor: samples of shape (N, n_f).
+    """
+
+    weights = weights + 1e-5  # (N, n_c - 2)
+    pdf = weights / torch.sum(weights, dim=-1, keepdim=True)  # (N, n_c - 2)
+    cdf = torch.cumsum(pdf, dim=-1)  # (N, n_c - 2)
+    cdf = torch.cat(
+        [torch.zeros_like(cdf[..., :1]), cdf], dim=-1
+    )  # (N, n_c - 1), cdf[0] = 0
+
+    if det:
+        u = torch.linspace(0, 1.0, n_samples)  # (n_f)
+        u = u.expand(list(cdf.shape[:-1]) + [n_samples])  # (N, n_f)
+    else:
+        u = torch.rand(list(cdf.shape[:-1]) + [n_samples])  # (N, n_f)
+
+    u = u.to(bins.device)
+    u = u.contiguous()
+
+    idxs = torch.searchsorted(cdf, u, right=True)  # (Batch, Nf)
+    below = torch.max(torch.zeros_like(idxs), idxs - 1)
+    above = torch.min(torch.ones_like(idxs) * (bins.shape[1] - 1), idxs)
+    inds_g = torch.stack([below, above], dim=-1)  # (Batch, Nf, 2)
+
+    matched_shape = list(inds_g.shape[:-1]) + [bins.shape[1]]  # (Batch, Nf, Nc-1)
+
+    cdf_g = torch.gather(cdf[..., None, :].expand(matched_shape), dim=-1, index=inds_g)
+    bins_g = torch.gather(
+        bins[..., None, :].expand(matched_shape), dim=-1, index=inds_g
+    )
+
+    denom = cdf_g[..., 1] - cdf_g[..., 0]  # (Batch, Nf)
+    denom = torch.where(denom < 1e-5, torch.ones_like(denom), denom)
+
+    t = (u - cdf_g[..., 0]) / denom
+    samples = bins_g[..., 0] + t * (bins_g[..., 1] - bins_g[..., 0])
+    return samples
