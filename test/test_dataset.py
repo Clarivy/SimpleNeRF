@@ -4,8 +4,12 @@ import numpy as np
 import torch
 from data_loader import getRaysDataLoaders
 import utils.ray as ray
+import cv2
+from matplotlib import pyplot as plt
 
 def main():
+    plt.imshow(np.load("data/lego_200x200.npz")["images_train"][0][:100])
+    plt.show()
     train_data_loader, val_data_loader = getRaysDataLoaders(
         "data/lego_200x200.npz", batch_size=100
     )

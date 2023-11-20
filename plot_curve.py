@@ -25,6 +25,12 @@ def plot_tensorboard_data(filenames):
     # Show the plot
     plt.show()
 
+# best result
+data_path = [
+    rf"result\2d_images\best\lr=1e-3,pe=10.csv",
+]
+plot_tensorboard_data(data_path)
+
 # Learning rate
 data_path = [
     rf"result\2d_images\lr\lr=1e-1.csv",
