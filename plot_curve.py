@@ -25,9 +25,16 @@ def plot_tensorboard_data(filenames):
     # Show the plot
     plt.show()
 
-# best result
+# coarse to fine
 data_path = [
-    rf"images\2D\version_23\lr=1e-2,pe=10.csv",
+    rf"images\coarse_to_fine\basic_nerf.csv",
+    rf"images\coarse_to_fine\fine_model.csv",
+]
+plot_tensorboard_data(data_path)
+
+# 3D PSNR
+data_path = [
+    rf"images\version_36\basic_nerf.csv",
 ]
 plot_tensorboard_data(data_path)
 

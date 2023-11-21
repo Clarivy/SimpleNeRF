@@ -267,16 +267,32 @@ The rays are randomly sampled from all pixels of all images. The number of rays 
 
 #### PSNR Curve
 
+The PSNR curve is shown below:
+
+![PSNR Curve](./images/version_36/psnr.png)
+
 #### Spherical Animation
 
 ### Bells and Whistles
 
 #### Coarse-to-fine Sampling
 
+To improve the performance and effeciency of sampling, I use coarse-to-fine sampling as described in the paper. The idea is to sample the point on the ray with a coarse step first. Then, we can sample the point on the ray based on $w_i$ along the ray with a fine step.
+
+To speed up the training process, I use a pre-trained coarse model to generate the coarse samples. Then, with a pre-trained weight, I can sample the point on the ray with a fine step.
+
 #### Better PSNR
+
+With the coarse-to-fine sampling, I can get a better PSNR. The PSNR curve is shown below:
+
+![PSNR Curve](./images/coarse_to_fine/psnr.png)
+
+As shown in the figure, the PSNR of the coarse-to-fine model converges faster than the model without coarse-to-fine sampling. Its PSNR gets better than the model without coarse-to-fine sampling and reached 32.5 dB.
 
 #### White Background
 
 #### Depth Map Video
 
 #### Nerfstudio
+
+#### Spherical Animation
