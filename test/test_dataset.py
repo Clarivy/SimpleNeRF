@@ -4,17 +4,18 @@ import numpy as np
 import torch
 from data_loader import getRaysDataLoaders
 import utils.ray as ray
-import cv2
-from matplotlib import pyplot as plt
 
 def main():
-    plt.imshow(np.load("data/lego_200x200.npz")["images_train"][0][:100])
-    plt.show()
     train_data_loader, val_data_loader = getRaysDataLoaders(
         "data/lego_200x200.npz", batch_size=100
     )
     pixels, rays_d, rays_o = next(iter(train_data_loader)) # Should expect (B, 3)
-    points = ray.sample_on_rays(rays_d, rays_o, near=2.0, far=6.0, n_sample=64)
+
+    batch_size, _ = rays_d.shape
+    t_vals = ray.sample_t_vals(batch_size=batch_size, device="cpu")  # (n_sample)
+    points, step_size = ray.sample_on_rays(
+        t_vals, rays_d, rays_o
+    )
     H, W = 200, 200
 
     server = viser.ViserServer(share=True)

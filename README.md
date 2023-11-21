@@ -140,19 +140,130 @@ The PSNR of the training process is shown below:
 
 #### Create Rays from Cameras
 
+Given $\textbf{focal}=f$ and $\textbf{c2w}=E$, we can create rays from cameras. First, the origin of the ray is the camera center $o = t$. To get the direction of the ray, we need to transform the pixel coordinate to the world coordinate. The pixel coordinate is defined as:
+
+$$
+\textbf{p} = \left[\begin{array}{c}u \\ v\end{array}\right]
+$$
+
+where $u, v$ are the pixel coordinate. The intrinsic matrix is defined as:
+
+$$
+\textbf{K} = \left[\begin{array}{ccc}f & 0 & o_x \\ 0 & f & o_y \\ 0 & 0 & 1\end{array}\right]
+$$
+
+where $o_x, o_y$ are the center of the image. With the intrinsic matrix, we can transform the pixel coordinate to the camera coordinate:
+
+$$
+\textbf{p}_{\text{camera}} = \textbf{K}^{-1}\textbf{p} = \left[\begin{array}{c}u \\ v \\ 1\end{array}\right]
+$$
+
+Then, we can transform the pixel coordinate from the camera coordinate to the world coordinate:
+
+$$
+\textbf{p}_{\text{world}} = E \textbf{P}_{\text{camera}}
+$$
+
+Therefore, the direction of the ray is:
+
+$$
+\textbf{d} = \frac{\textbf{p}_{\text{world}} - o}{\left\|\textbf{p}_{\text{world}} - o\right\|}
+$$
 
 
 #### Sampling
 
-#### Neural Radiance Field
+Given the ray, we can sample the point on the ray. Since the direction of the ray is normalized, we can sample the point on the ray by:
+
+$$
+\textbf{p}_i = o + t \cdot \textbf{d}, t \in [near, far]
+$$
+
+To introduce randomness, we can sample the point on the ray by:
+
+$$
+\textbf{p}_i = o + (t + \epsilon) \cdot \textbf{d}, t \in [near, far]
+$$
+
+where $\epsilon \sim \mathcal{U}(-\frac{far - near}{N}, \frac{far - near}{N})$.
+
+In my implementation, I set $N=64$.
+
+#### Model Architecture
+
+Given a point on the ray and the direction of the ray, the model should predict the RGB value of the point as well as the density of the point. Similar to the 2D model, I use a MLP to predict the RGB value and density. The input dimension is $3\times(2\textbf L + 1)$ where $\textbf L$ is the level of positional encoding. The activation function between layers is `ReLU`. After 4 256-dimension hidden layers, the output then feeds into 2 different MLPs. The output dimension of the RGB MLP is 3. The output dimension of the density MLP is 1. At the end of the RGB MLP, I added a `Sigmoid` layer to constrain the network output be in the range of (0, 1). At the end of the density MLP, I added a `ReLU` layer to constrain the network output be positive.
+
+In my implementation, I set the hidden dimension to be 256 and the number of layers to be 4. The learning rate is set to be 5e-4. The batch size is set to be 1024 (rays).
 
 #### Volume Rendering
+
+Given the RGB value and density of the point, we can render the image by:
+
+$$
+\textbf{C} = \sum_{i=1}^{N} w_i \cdot \textbf{C}_i
+$$
+
+where $\textbf{C}_i$ is the RGB value of the $i$-th point on the ray. $w_i$ is the weight of the $i$-th point on the ray. The weight is defined as:
+
+$$
+w_i = (1 - \exp(-\alpha_i \Delta t_i)) \exp(\sum_{j=1}^{i-1}-\alpha_j \Delta t)
+$$
+
+where $\alpha_i$ is the density of the $i$-th point on the ray, $\Delta t_i$ is the distance between the $i$-th point and the $(i-1)$-th point on the ray.
 
 ### Result
 
 #### Rays and Samples
 
+The rays and samples are shown below:
+
+![Rays and Samples](./images/sample.png)
+
+The rays are randomly sampled from all pixels of all images. The number of rays in the figure is 100. Each ray has 64 samples.
+
 #### Training Process
+
+<div class="gallery">
+    <figure>
+        <img src="images/version_36/000001.png" alt="Epoch 1">
+        <figcaption>Epoch 1</figcaption>
+    </figure>
+    <figure>
+        <img src="images/version_36/000002.png" alt="Epoch 2">
+        <figcaption>Epoch 1</figcaption>
+    </figure>
+    <figure>
+        <img src="images/version_36/000003.png" alt="Epoch 3">
+        <figcaption>Epoch 3</figcaption>
+    </figure>
+    <figure>
+        <img src="images/version_36/000004.png" alt="Epoch 4">
+        <figcaption>Epoch 4</figcaption>
+    </figure>
+    <figure>
+        <img src="images/version_36/000005.png" alt="Epoch 5">
+        <figcaption>Epoch 5</figcaption>
+    </figure>
+    <figure>
+        <img src="images/version_36/000080.png" alt="Epoch 80">
+        <figcaption>Epoch 80</figcaption>
+    </figure>
+    <style>
+        .gallery {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .gallery img {
+            width: 100px; /* Adjust as needed */
+            height: auto;
+        }
+        .gallery figure {
+            margin: 10px;
+            text-align: center;
+        }
+    </style>
+</div>
 
 #### PSNR Curve
 
