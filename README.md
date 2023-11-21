@@ -88,11 +88,59 @@ With the best hyperparameters given above, I trained the model for 300 epochs. T
 
 ### Another Image Result
 
+<div class="gallery">
+    <figure>
+        <img src="images/2D/version_23/0000.jpg" alt="Epoch 0">
+        <figcaption>Epoch 0</figcaption>
+    </figure>
+    <figure>
+        <img src="images/2D/version_23/0001.jpg" alt="Epoch 1">
+        <figcaption>Epoch 1</figcaption>
+    </figure>
+    <figure>
+        <img src="images/2D/version_23/0002.jpg" alt="Epoch 2">
+        <figcaption>Epoch 2</figcaption>
+    </figure>
+    <figure>
+        <img src="images/2D/version_23/0003.jpg" alt="Epoch 3">
+        <figcaption>Epoch 3</figcaption>
+    </figure>
+    <figure>
+        <img src="images/2D/version_23/0004.jpg" alt="Epoch 4">
+        <figcaption>Epoch 4</figcaption>
+    </figure>
+    <figure>
+        <img src="images/2D/version_23/0299.jpg" alt="Epoch 299">
+        <figcaption>Epoch 299</figcaption>
+    </figure>
+    <style>
+        .gallery {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .gallery img {
+            width: 100px; /* Adjust as needed */
+            height: auto;
+        }
+        .gallery figure {
+            margin: 10px;
+            text-align: center;
+        }
+    </style>
+</div>
+
+The PSNR of the training process is shown below:
+
+![Training PSNR](./images/2D/version_23/Berkeley_glade_afternoon.png)
+
 ## Part 2: Fit a Neural Radiance Field from Multi-view Images
 
 ### Method
 
 #### Create Rays from Cameras
+
+
 
 #### Sampling
 
