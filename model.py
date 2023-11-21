@@ -241,6 +241,19 @@ class NeRFModule(L.LightningModule):
         rgb = self.rgb_layer(x, ray_direction)
         return density, rgb
 
+    def forward_without_rgb(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x (torch.Tensor): input tensor of shape (N, 3).
+
+        Returns:
+            torch.Tensor: output tensor of shape (N, 3).
+        """
+        x = self.input_process(x)
+        density = self.density_layer(x)
+        return density
+
     def render_rays(
         self, ray_direction: torch.Tensor, ray_origins: torch.Tensor, perturb=True
     ) -> torch.Tensor:
@@ -339,12 +352,18 @@ class CoarseToFineNeRFModule(L.LightningModule):
         self.height = height
         self.width = width
 
-        self.coarse_model = NeRFModule.load_from_checkpoint(rf"lightning_logs\version_36\checkpoints\epoch=84-step=166090.ckpt")
+        self.coarse_model = NeRFModule.load_from_checkpoint(
+            rf"lightning_logs\version_36\checkpoints\epoch=84-step=166090.ckpt"
+        )
         self.fine_model = NeRFModule(n_sample=n_f, near=near, far=far)
         self.PSNR_loss = PSNRLoss()
 
     def render_rays(
-        self, ray_direction: torch.Tensor, ray_origins: torch.Tensor, perturb=True
+        self,
+        ray_direction: torch.Tensor,
+        ray_origins: torch.Tensor,
+        perturb=True,
+        white_background=False,
     ) -> torch.Tensor:
         """Render rays using coarse-to-find strategy.
         Reference: https://github.com/kwea123/nerf_pl/
@@ -352,6 +371,8 @@ class CoarseToFineNeRFModule(L.LightningModule):
         Args:
             ray_direction (torch.Tensor): ray direction of shape (N, 3).
             ray_origins (torch.Tensor): ray origins of shape (N, 3).
+            perturb (bool, optional): whether to perturb the sample points. Defaults to True.
+            white_background (bool, optional): whether to use white background. Defaults to False.
 
         Returns:
             torch.Tensor: output RGB of shape (N, 3).
@@ -377,7 +398,9 @@ class CoarseToFineNeRFModule(L.LightningModule):
             coarse_density, coarse_step_size
         )  # (N, n_c)
         t_mid = 0.5 * (t_vals[:, 1:] + t_vals[:, :-1])  # (N, n_c - 1)
-        t_fine = ray.sample_pdf(t_mid, coarse_weights[:, 1:-1], self.n_f).detach()  # (N, n_f)
+        t_fine = ray.sample_pdf(
+            t_mid, coarse_weights[:, 1:-1], self.n_f
+        ).detach()  # (N, n_f)
 
         t_fine = torch.sort(torch.cat([t_vals, t_fine], dim=-1), dim=-1)[
             0
@@ -394,9 +417,16 @@ class CoarseToFineNeRFModule(L.LightningModule):
         fine_density = fine_density.reshape(-1, self.n_c + self.n_f)
         fine_rgb = fine_rgb.reshape(-1, self.n_c + self.n_f, 3)
 
-        fine_output = ray.volumn_render(fine_density, fine_rgb, fine_step_size)
+        fine_output = ray.volumn_render(
+            fine_density, fine_rgb, fine_step_size, white_background=white_background
+        )
 
-        coarse_output = ray.volumn_render(coarse_density, coarse_rgb, coarse_step_size)
+        coarse_output = ray.volumn_render(
+            coarse_density,
+            coarse_rgb,
+            coarse_step_size,
+            white_background=white_background,
+        )
 
         result = {
             "coarse_output": coarse_output,
@@ -404,6 +434,57 @@ class CoarseToFineNeRFModule(L.LightningModule):
         }
 
         return result
+
+    def render_depth_map(
+        self,
+        ray_direction: torch.Tensor,
+        ray_origins: torch.Tensor,
+        perturb=True,
+    ) -> torch.Tensor:
+        """Render depth map using coarse-to-find strategy.
+
+        Args:
+            ray_direction (torch.Tensor): ray direction of shape (N, 3).
+            ray_origins (torch.Tensor): ray origins of shape (N, 3).
+            perturb (bool, optional): whether to perturb the sample points. Defaults to True.
+
+        Returns:
+            torch.Tensor: output depth map of shape (N, 1).
+        """
+        batch_size, _ = ray_direction.shape
+        t_vals = ray.sample_t_vals(
+            near=self.near,
+            far=self.far,
+            batch_size=batch_size,
+            n_sample=self.n_c,
+            perturb=perturb,
+        )  # (n_sample)
+        coarse_sample_points, coarse_step_size = ray.sample_on_rays(
+            t_vals, ray_direction, ray_origins
+        )
+        coarse_density = self.coarse_model.forward_without_rgb(coarse_sample_points)
+        coarse_density = coarse_density.reshape(-1, self.n_c)  # (N, n_c)
+        coarse_weights = ray.sample_to_weights(
+            coarse_density, coarse_step_size
+        )  # (N, n_c)
+        t_mid = 0.5 * (t_vals[:, 1:] + t_vals[:, :-1])  # (N, n_c - 1)
+        t_fine = ray.sample_pdf(
+            t_mid, coarse_weights[:, 1:-1], self.n_f
+        ).detach()  # (N, n_f)
+
+        t_fine = torch.sort(torch.cat([t_vals, t_fine], dim=-1), dim=-1)[
+            0
+        ]  # (N, n_c + n_f)
+        fine_sample_points, fine_step_size = ray.sample_on_rays(
+            t_fine, ray_direction, ray_origins
+        )
+
+        fine_density = self.fine_model.forward_without_rgb(fine_sample_points) # (N, n_c + n_f)
+        fine_density = fine_density.reshape(-1, self.n_c + self.n_f) # (N, n_c + n_f)
+        fine_weight = ray.sample_to_weights(fine_density, fine_step_size) # (N, n_c + n_f)
+        output_depth = torch.sum(fine_weight * t_fine, dim=-1, keepdim=True) # (N, 1)
+
+        return output_depth
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         """Training step"""

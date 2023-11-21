@@ -124,7 +124,10 @@ def sample_to_weights(sigmas: torch.Tensor, step_size: float) -> torch.Tensor:
 
 
 def volumn_render(
-    sigmas: torch.Tensor, rgbs: torch.Tensor, step_size: torch.Tensor
+    sigmas: torch.Tensor,
+    rgbs: torch.Tensor,
+    step_size: torch.Tensor,
+    white_background=False,
 ) -> torch.Tensor:
     """Volumn rendering.
 
@@ -132,10 +135,16 @@ def volumn_render(
         sigmas (torch.Tensor): density of shape (N, n_sample).
         rgbs (torch.Tensor): rgb of shape (N, n_sample, 3).
         step_size (torch.Tensor): step size between sample of shape (N, n_sample).
+        white_background (bool, optional): whether to use white background. Defaults to False.
 
     Returns:
         torch.Tensor: rendered rgb of shape (N, 3).
     """
+    if white_background:
+        sigmas = torch.cat([sigmas, 9999 * torch.ones_like(sigmas[:, :1])], dim=-1)
+        rgbs = torch.cat([rgbs, torch.ones_like(rgbs[:, :1])], dim=-2)
+        step_size = torch.cat([step_size, torch.ones_like(step_size[:, :1])], dim=-1)
+
     weights = sample_to_weights(sigmas, step_size)  # (N, n_sample)
 
     # Get rgb
