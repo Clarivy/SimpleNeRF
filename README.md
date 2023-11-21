@@ -170,7 +170,6 @@ $$
 \textbf{d} = \frac{\textbf{p}_{\text{world}} - o}{\left\|\textbf{p}_{\text{world}} - o\right\|}
 $$
 
-
 #### Sampling
 
 Given the ray, we can sample the point on the ray. Since the direction of the ray is normalized, we can sample the point on the ray by:
@@ -273,6 +272,32 @@ The PSNR curve is shown below:
 
 #### Spherical Animation
 
+<div class="gallery">
+    <figure>
+        <img src="images/version_36/basic_nerf_000001.gif" alt="Epoch 1">
+        <figcaption>Epoch 1</figcaption>
+    </figure>
+    <figure>
+        <img src="images/version_36/basic_nerf_000085.gif" alt="Epoch 85">
+        <figcaption>Epoch 85</figcaption>
+    </figure>
+    <style>
+        .gallery {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .gallery img {
+            width: 100px; /* Adjust as needed */
+            height: auto;
+        }
+        .gallery figure {
+            margin: 10px;
+            text-align: center;
+        }
+    </style>
+</div>
+
 ### Bells and Whistles
 
 #### Coarse-to-fine Sampling
@@ -280,6 +305,32 @@ The PSNR curve is shown below:
 To improve the performance and effeciency of sampling, I use coarse-to-fine sampling as described in the paper. The idea is to sample the point on the ray with a coarse step first. Then, we can sample the point on the ray based on $w_i$ along the ray with a fine step.
 
 To speed up the training process, I use a pre-trained coarse model to generate the coarse samples. Then, with a pre-trained weight, I can sample the point on the ray with a fine step.
+
+<div class="gallery">
+    <figure>
+        <img src="images/version_36/basic_nerf_000001.gif" alt="w/o Coarse-to-Fine">
+        <figcaption>w/o Coarse-to-Fine</figcaption>
+    </figure>
+    <figure>
+        <img src="images/coarse_to_fine/fine_000044.gif" alt="w/ Corase-to-Fine">
+        <figcaption>w/ Corase-to-Fine</figcaption>
+    </figure>
+    <style>
+        .gallery {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .gallery img {
+            width: 100px; /* Adjust as needed */
+            height: auto;
+        }
+        .gallery figure {
+            margin: 10px;
+            text-align: center;
+        }
+    </style>
+</div>
 
 #### Better PSNR
 
@@ -291,8 +342,52 @@ As shown in the figure, the PSNR of the coarse-to-fine model converges faster th
 
 #### White Background
 
+To change the background color of the image, I add a sample in white color at the end of the ray. So if the ray does not hit any object, the color of the ray will be white.
+
+<div class="gallery">
+    <figure>
+        <img src="images/coarse_to_fine/white_000044.gif" alt="white background">
+        <figcaption>White Background</figcaption>
+    </figure>
+    <style>
+        .gallery {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .gallery img {
+            width: 100px; /* Adjust as needed */
+            height: auto;
+        }
+        .gallery figure {
+            margin: 10px;
+            text-align: center;
+        }
+    </style>
+</div>
+
 #### Depth Map Video
 
-#### Nerfstudio
+To get the depth map from NeRF, I integrate $w_i$ along the ray. The depth map video is shown below:
 
-#### Spherical Animation
+<div class="gallery">
+    <figure>
+        <img src="images/coarse_to_fine/depth_000044.gif" alt="Depth Map">
+        <figcaption>Depth Map</figcaption>
+    </figure>
+    <style>
+        .gallery {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .gallery img {
+            width: 100px; /* Adjust as needed */
+            height: auto;
+        }
+        .gallery figure {
+            margin: 10px;
+            text-align: center;
+        }
+    </style>
+</div>
